@@ -6,6 +6,7 @@ import { PostNotFoundException, UnexpectedException } from '../exceptions/CaseEx
 import validationMiddleware from '../middleware/validation.middleware';
 import CreatePostDto from './post.dto';
 import authMiddleware from '../middleware/auth.middleware';
+import UserRequest from 'interfaces/userRequest.interface';
 
 
 class PostsController implements Controller {
@@ -24,7 +25,7 @@ class PostsController implements Controller {
             .get(`${this.path}/:id`, this.getPostById)
             .patch(`${this.path}/:id`, validationMiddleware(CreatePostDto, true), this.modifyPost)
             .delete(`${this.path}/:id`, this.deletePost)
-            .post(this.path, validationMiddleware(CreatePostDto),this.createPost)
+            .post(this.path, validationMiddleware(CreatePostDto), this.createPost)
     }
 
     private getAllPosts = (request: express.Request, response: express.Response) => {
@@ -34,19 +35,18 @@ class PostsController implements Controller {
             });
     }
 
-    private getPostById = (request: express.Request, response: express.Response, next: express.NextFunction) => {
+    private getPostById = async (request: express.Request, response: express.Response, next: express.NextFunction) => {
         const id = request.params.id;
-        this.post.findById(id)
-            .then((post) => {
-                if (post) {
-                    response.send(post);
-                } else {
-                    next(new PostNotFoundException(id))
-                }
-            });
+        try {
+            const post = await this.post.findById(id)
+            response.send(post)
+        } catch (error) {
+            next(new PostNotFoundException(id))
+        }
+
     }
 
-    private modifyPost = (request: express.Request, response: express.Response,  next: express.NextFunction) => {
+    private modifyPost = (request: express.Request, response: express.Response, next: express.NextFunction) => {
         const id = request.params.id;
         const postData: Post = request.body;
         this.post.findByIdAndUpdate(id, postData, { new: true })
@@ -59,9 +59,12 @@ class PostsController implements Controller {
             });
     }
 
-    private createPost = (request: express.Request, response: express.Response,  next: express.NextFunction) => {
+    private createPost = (request: UserRequest, response: express.Response, next: express.NextFunction) => {
         const postData: Post = request.body;
-        const createdPost = new this.post(postData);
+        const createdPost = new this.post({
+            ...postData,
+            authorId: request.user._id
+        });
         createdPost.save()
             .then((savedPost) => {
                 if (savedPost) {
@@ -69,7 +72,7 @@ class PostsController implements Controller {
                 } else {
                     next(new UnexpectedException())
                 }
-            }); 
+            });
     }
 
     private deletePost = (request: express.Request, response: express.Response) => {
