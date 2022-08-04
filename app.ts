@@ -3,42 +3,48 @@ import * as bodyParser from 'body-parser';
 import Controller from './src/interfaces/controller.interface'
 import mongoose from 'mongoose';
 import errorMiddleware from './src/middleware/error.middleware';
+import cookieParser from 'cookie-parser';
 
 class App {
     public app: express.Application
 
     constructor(controllers: Controller[]) {
-        this.app = express()
-        this.connectToDatabase();
+        this.app = express();
 
-        this.initialzeMiddlewares()
-        this.initialzeControllers(controllers)
-        this.initialzeErrorHandling()
+        this.connectToDatabase();
+        this.initialzeMiddlewares();
+        this.initializeControllers(controllers);
+        this.initializeErrorHandling();
     }
 
 
+    public listen() {
+        this.app.listen(process.env.PORT, () => {
+          console.log(`App listening on the port ${process.env.PORT}`);
+        });
+      }
+    
+      public getServer() {
+        return this.app;
+      }
+
     private initialzeMiddlewares() {
         this.app.use(bodyParser.json())
-        this.app.use(express.urlencoded({extended: true}))
+        this.app.use(express.urlencoded({ extended: true }))
+        this.app.use(cookieParser()) // transform string into an object
         //this.app.use(cors)
 
     }
 
-    private initialzeErrorHandling() {
-        this.app.use(errorMiddleware)
-    }
-    private initialzeControllers(controllers: Controller[]) {
-        controllers.forEach(controller => {
-            this.app.use('/', controller.router)
+    private initializeErrorHandling() {
+        this.app.use(errorMiddleware);
+      }
+    
+      private initializeControllers(controllers: Controller[]) {
+        controllers.forEach((controller) => {
+          this.app.use('/', controller.router);
         });
-    }
-
-    public listen() {
-        this.app.listen(process.env.PORT, () => {
-            console.log(`App listening on port: ${process.env.PORT}`);
-            
-        })
-    }
+      }
 
     private connectToDatabase() {
         const { MONGO_PATH, PORT } = process.env

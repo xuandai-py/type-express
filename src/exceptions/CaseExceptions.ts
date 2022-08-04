@@ -24,7 +24,20 @@ class WrongCredentialException extends HttpException {
     }
 }
 
+class WrongAuthenticationException extends HttpException {
+    constructor() {
+        super(404, `Wrong authentication token`)
+    }
+}
+
+class OtherCaseExceptions extends HttpException {
+    constructor(status: number, message: string) {
+        super(status, message)
+    }
+}
+
 export {
     PostNotFoundException, UnexpectedException,
-    UserAlreadyExistsException, WrongCredentialException
+    UserAlreadyExistsException, WrongCredentialException, OtherCaseExceptions,
+    WrongAuthenticationException
 }

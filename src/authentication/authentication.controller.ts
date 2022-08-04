@@ -8,7 +8,10 @@ import validationMiddleware from "../middleware/validation.middleware";
 import LoginDto from "./Login.dto";
 import User from '../users/user.interface'
 import { DataStoredInToken, TokenData } from "../interfaces/TokenData";
-import jwt from 'jwt'
+import jwt from 'jsonwebtoken'
+import authMiddleware from "../middleware/auth.middleware";
+import { UnexpectedException } from '../exceptions/CaseExceptions'
+import { uid } from 'rand-token'
 
 class AuthenticationController implements Controller {
 
@@ -21,59 +24,103 @@ class AuthenticationController implements Controller {
 
     private initialzeRoutes() {
         this.router.post(`${this.path}/register`, validationMiddleware(CreateUserDto), this.registration)
-        this.router.post(`${this.path}/login`, validationMiddleware(LoginDto), this.loggingIn)
+        this.router.post(`${this.path}/logout`, this.loggingOut)
+        this.router.get(`${this.path}/test`, this.checkAuth)
+
+        this.router.all(`${this.path}/`, authMiddleware)
+            .post(`${this.path}/login`, validationMiddleware(LoginDto), this.loggingIn)
+            .post(`${this.path}/changePassword`, validationMiddleware(LoginDto), this.changePassword)
+        //this.router.post(`${this.path}/refreshToken`, this.refreshToken)
     }
 
-    private registration = async (requset: Request, response: Response, next: NextFunction) => {
-        const userData: CreateUserDto = requset.body
+    public checkAuth = (request: Request, response: Response, next: NextFunction) => {
+        response.send('Working')
+    }
+
+    private registration = async (request: Request, res: Response, next: NextFunction) => {
+        const userData: CreateUserDto = request.body
         const isUserExisted = await this.userModel.findOne({ email: userData.email })
         if (isUserExisted) {
-            next(new UserAlreadyExistsException(userData.email))
-        } else {
+            console.log('User existed');
+            return next(new UserAlreadyExistsException(userData.email))
+        }
+        try {
             const hashedPassword = await bcrypt.hash(userData.password, 10)
             const createUser = await this.userModel.create({
                 ...userData,
                 password: hashedPassword
             })
-            createUser.password = undefined
+            //createUser.password = undefined
             // gen Token
             const token = this.createToken(createUser)
-            response.setHeader('Set-Cookie',  [this.createCookie(token)])
-            response.status(201).send(createUser)
+            res.setHeader('Set-Cookie', [this.createCookie(token)])
+            res.status(201).send(createUser)
 
+        }  catch (error) {
+            console.error(error);
+            return next(new UnexpectedException())
+        }
+
+    }
+
+    private loggingIn = async (request: Request, response: Response, next: NextFunction) => {
+        const userLoggedInData: LoginDto = request.body
+        const user = await this.userModel.findOne({ email: userLoggedInData.email })
+        const compareHashedPassword = await bcrypt.compare(userLoggedInData.password, user.password)
+
+        if (!user || !compareHashedPassword) return next(new WrongCredentialException())
+        try {
+            user.password = undefined
+            const token = this.createToken(user)
+            response.setHeader('Set-Cookie', [this.createCookie(token)])
+            response.status(200).send(user)
+        } catch (error) {
+            console.error(error);
+            next(new UnexpectedException())
         }
     }
 
-    private loggingIn = async (requset: Request, response: Response, next: NextFunction) => {
-        const userLogInData: LoginDto = requset.body
-        const user = await this.userModel.findOne({ email: userLogInData.email })
-        if (user) {
-            const compareHashedPassword = await bcrypt.compare(userLogInData.password, user.password)
-            if (compareHashedPassword) {
-                user.password = undefined
-                const token = this.createToken(user)
-                response.setHeader('Set-Cookie', [this.createCookie(token)])
-                response.status(200).send(user)
-            } else {
-                next(new WrongCredentialException())
-            }
-        } else {
-            next(new WrongCredentialException())
+    //
+    private changePassword = async (request: Request, response: Response, next: NextFunction) => {
+        // email, currentPassword, newPassword
+        const {email, password, newPassword} = request.body
+
+        const currentUserDB = await this.userModel.findOne({ email: email })
+        const compareHashedPassword = await bcrypt.compare(password, currentUserDB.password)
+
+        if (!currentUserDB || !compareHashedPassword) return next(new WrongCredentialException())
+        try {
+            const hashedPassword = await bcrypt.hash(newPassword, 10)
+            await currentUserDB.updateOne({ password: hashedPassword })
+            response.sendStatus(200)
+        } catch (error) {
+            console.error(error);
+            next(new UnexpectedException())
         }
+
+
     }
 
-    private createToken(user: User): TokenData{
+    private loggingOut = async (request: Request, response: Response, next: NextFunction) => {
+        response.setHeader('Set-Cookie', ['Authorization=;Max-age=0'])
+        response.sendStatus(200)
+    }
+
+    private createToken(user: User): TokenData {
         const secretKey = process.env.JWT_SECRET_KEY
-        const expiresIn = 60 * 60
+        const expiresIn = 60 * 60 // 1h
+        // auto refresh token at last minute while user still logging
+
         const data: DataStoredInToken = {
             _id: user._id,
             userEmail: user.email
         }
-        
+
         return {
-            expiresIn, token: jwt.sign(data, secretKey, {expiresIn})
+            expiresIn, token: jwt.sign(data, secretKey, { expiresIn }), refreshToken: uid(256)
         }
     }
+
 
     private createCookie(token: TokenData) {
         return `Authorization=${token.token}; HttpOnly; Max-age=${token.expiresIn}`

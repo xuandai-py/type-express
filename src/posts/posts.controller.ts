@@ -5,6 +5,7 @@ import Controller from '../interfaces/controller.interface'
 import { PostNotFoundException, UnexpectedException } from '../exceptions/CaseExceptions';
 import validationMiddleware from '../middleware/validation.middleware';
 import CreatePostDto from './post.dto';
+import authMiddleware from '../middleware/auth.middleware';
 
 
 class PostsController implements Controller {
@@ -18,10 +19,12 @@ class PostsController implements Controller {
 
     private initializeRoutes() {
         this.router.get(this.path, this.getAllPosts);
-        this.router.get(`${this.path}/:id`, this.getPostById);
-        this.router.patch(`${this.path}/:id`, validationMiddleware(CreatePostDto, true), this.modifyPost);
-        this.router.delete(`${this.path}/:id`, this.deletePost);
-        this.router.post(this.path, validationMiddleware(CreatePostDto),this.createPost);
+        this.router
+            .all(`${this.path}/*`, authMiddleware)
+            .get(`${this.path}/:id`, this.getPostById)
+            .patch(`${this.path}/:id`, validationMiddleware(CreatePostDto, true), this.modifyPost)
+            .delete(`${this.path}/:id`, this.deletePost)
+            .post(this.path, validationMiddleware(CreatePostDto),this.createPost)
     }
 
     private getAllPosts = (request: express.Request, response: express.Response) => {
