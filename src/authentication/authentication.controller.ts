@@ -42,7 +42,7 @@ class AuthenticationController implements Controller {
         const isUserExisted = await this.userModel.findOne({ email: userData.email })
         if (isUserExisted) {
             console.log('User existed');
-            return next(new UserAlreadyExistsException(userData.email))
+         next(new UserAlreadyExistsException(userData.email))
         }
         try {
             const hashedPassword = await bcrypt.hash(userData.password, 10)
@@ -50,40 +50,42 @@ class AuthenticationController implements Controller {
                 ...userData,
                 password: hashedPassword
             })
-            //createUser.password = undefined
+            createUser.password = undefined
             // gen Token
             const token = this.createToken(createUser)
             res.setHeader('Set-Cookie', [this.createCookie(token)])
             res.status(201).send(createUser)
 
-        }  catch (error) {
+        } catch (error) {
             console.error(error);
-            return next(new UnexpectedException())
+            next(new UnexpectedException())
         }
 
     }
 
     private loggingIn = async (request: Request, response: Response, next: NextFunction) => {
         const userLoggedInData: LoginDto = request.body
-        const user = await this.userModel.findOne({ email: userLoggedInData.email })
-        const compareHashedPassword = await bcrypt.compare(userLoggedInData.password, user.password)
 
-        if (!user || !compareHashedPassword) return next(new WrongCredentialException())
         try {
+            const user = await this.userModel.findOne({ email: userLoggedInData.email })
+            if (!user) next(new WrongCredentialException())
+            const compareHashedPassword = await bcrypt.compare(userLoggedInData.password, user.password)
+            if (!compareHashedPassword) next(new WrongCredentialException())
             user.password = undefined
             const token = this.createToken(user)
             response.setHeader('Set-Cookie', [this.createCookie(token)])
             response.status(200).send(user)
-        } catch (error) {
-            console.error(error);
+        } catch (unexpectedEx) {
+            console.error(unexpectedEx);
             next(new UnexpectedException())
         }
+
     }
 
     //
     private changePassword = async (request: Request, response: Response, next: NextFunction) => {
         // email, currentPassword, newPassword
-        const {email, password, newPassword} = request.body
+        const { email, password, newPassword } = request.body
 
         const currentUserDB = await this.userModel.findOne({ email: email })
         const compareHashedPassword = await bcrypt.compare(password, currentUserDB.password)

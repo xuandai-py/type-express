@@ -13,7 +13,7 @@ async function authMiddleware(request: UserRequest, response: Response, next: Ne
         try {
             const verify = jwt.verify(cookies.Authorization, secretKey) as DataStoredInToken
             const user = await userModel.findById(verify._id)
-            if (user) {
+            if (user) { 
                 request.user = user
                 next()
             } else next(new WrongAuthenticationException())
