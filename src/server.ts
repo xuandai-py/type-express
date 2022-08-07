@@ -17,13 +17,15 @@ import PostsController from './posts/posts.controller';
 import 'dotenv/config'
 import validateEnv from './utils/validateEnv'
 import AuthenticationController from './authentication/authentication.controller';
+import ReportController from './users/report.controller';
 
 validateEnv()
 const app = new App(
-    [
+  [
     new PostsController(),
-      new AuthenticationController()
-    ],
-  );
-   
-  app.listen();
+    new AuthenticationController(),
+    new ReportController()
+  ],
+);
+
+app.listen();
